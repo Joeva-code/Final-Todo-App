@@ -1,15 +1,15 @@
 const { pool } = require('../config/database.js');
 
 class Todo {
-    // Create a new todo
-    static async create(todoData) {
+    // Create a new todo for a specific user
+    static async create(todoData, userId) {
         const { title, description, priority, due_date } = todoData;
         const query = `
-            INSERT INTO todos (title, description, priority, due_date)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO todos (user_id, title, description, priority, due_date)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *
         `;
-        const values = [title, description, priority || 2, due_date || null];
+        const values = [userId, title, description, priority || 2, due_date || null];
         
         try {
             const result = await pool.query(query, values);
@@ -19,30 +19,25 @@ class Todo {
         }
     }
 
-    // Get all todos with optional filtering
-    static async findAll(filters = {}) {
-        let query = 'SELECT * FROM todos';
-        const values = [];
-        const conditions = [];
-        let paramCounter = 1;
+    // Get all todos for a specific user
+    static async findAll(userId, filters = {}) {
+        let query = 'SELECT * FROM todos WHERE user_id = $1';
+        const values = [userId];
+        let paramCounter = 2;
 
         if (filters.completed !== undefined && filters.completed !== '') {
-            conditions.push(`completed = $${paramCounter++}`);
+            query += ` AND completed = $${paramCounter++}`;
             values.push(filters.completed === 'true');
         }
 
         if (filters.priority) {
-            conditions.push(`priority = $${paramCounter++}`);
+            query += ` AND priority = $${paramCounter++}`;
             values.push(parseInt(filters.priority));
         }
 
         if (filters.search) {
-            conditions.push(`(title ILIKE $${paramCounter++} OR description ILIKE $${paramCounter++})`);
+            query += ` AND (title ILIKE $${paramCounter++} OR description ILIKE $${paramCounter++})`;
             values.push(`%${filters.search}%`, `%${filters.search}%`);
-        }
-
-        if (conditions.length > 0) {
-            query += ' WHERE ' + conditions.join(' AND ');
         }
 
         // Add sorting
@@ -69,19 +64,19 @@ class Todo {
         }
     }
 
-    // Get single todo by ID
-    static async findById(id) {
-        const query = 'SELECT * FROM todos WHERE id = $1';
+    // Get single todo by ID (ensure it belongs to user)
+    static async findById(id, userId) {
+        const query = 'SELECT * FROM todos WHERE id = $1 AND user_id = $2';
         try {
-            const result = await pool.query(query, [id]);
+            const result = await pool.query(query, [id, userId]);
             return result.rows[0];
         } catch (error) {
             throw error;
         }
     }
 
-    // Update todo
-    static async update(id, updates) {
+    // Update todo (ensure it belongs to user)
+    static async update(id, userId, updates) {
         const fields = [];
         const values = [];
         let valueCounter = 1;
@@ -109,11 +104,11 @@ class Todo {
 
         if (fields.length === 0) return null;
 
-        values.push(id);
+        values.push(id, userId);
         const query = `
             UPDATE todos 
             SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $${valueCounter}
+            WHERE id = $${valueCounter} AND user_id = $${valueCounter + 1}
             RETURNING *
         `;
 
@@ -125,60 +120,48 @@ class Todo {
         }
     }
 
-    // Delete todo
-    static async delete(id) {
-        const query = 'DELETE FROM todos WHERE id = $1 RETURNING id';
+    // Delete todo (ensure it belongs to user)
+    static async delete(id, userId) {
+        const query = 'DELETE FROM todos WHERE id = $1 AND user_id = $2 RETURNING id';
         try {
-            const result = await pool.query(query, [id]);
+            const result = await pool.query(query, [id, userId]);
             return result.rows[0];
         } catch (error) {
             throw error;
         }
     }
 
-    // Toggle todo completion status
-    static async toggleComplete(id) {
+    // Toggle todo completion (ensure it belongs to user)
+    static async toggleComplete(id, userId) {
         const query = `
             UPDATE todos 
             SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
+            WHERE id = $1 AND user_id = $2
             RETURNING *
         `;
         try {
-            const result = await pool.query(query, [id]);
+            const result = await pool.query(query, [id, userId]);
             return result.rows[0];
         } catch (error) {
             throw error;
         }
     }
 
-    // Get statistics
-    static async getStats() {
+    // Get statistics for a specific user
+    static async getStats(userId) {
         const query = `
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN completed THEN 1 ELSE 0 END) as completed,
                 SUM(CASE WHEN NOT completed THEN 1 ELSE 0 END) as pending,
                 ROUND(AVG(priority), 2) as avg_priority,
-                MIN(created_at) as oldest_todo,
-                MAX(created_at) as newest_todo,
                 COUNT(CASE WHEN due_date < CURRENT_DATE AND NOT completed THEN 1 END) as overdue
             FROM todos
+            WHERE user_id = $1
         `;
         try {
-            const result = await pool.query(query);
+            const result = await pool.query(query, [userId]);
             return result.rows[0];
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    // Bulk delete completed todos
-    static async deleteCompleted() {
-        const query = 'DELETE FROM todos WHERE completed = true RETURNING id';
-        try {
-            const result = await pool.query(query);
-            return result.rows;
         } catch (error) {
             throw error;
         }

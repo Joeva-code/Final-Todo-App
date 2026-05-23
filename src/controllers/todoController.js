@@ -1,7 +1,7 @@
 const Todo = require('../models/Todo.js');
 const { validationResult } = require('express-validator');
 
-// Get all todos
+// Get all todos for authenticated user
 const getAllTodos = async (req, res) => {
     try {
         const { completed, priority, search, sortBy, sortOrder, limit, offset } = req.query;
@@ -16,7 +16,7 @@ const getAllTodos = async (req, res) => {
             offset: offset ? parseInt(offset) : undefined
         };
         
-        const todos = await Todo.findAll(filters);
+        const todos = await Todo.findAll(req.userId, filters);
         res.json({ 
             success: true, 
             count: todos.length,
@@ -30,7 +30,7 @@ const getAllTodos = async (req, res) => {
 // Get single todo
 const getTodoById = async (req, res) => {
     try {
-        const todo = await Todo.findById(parseInt(req.params.id));
+        const todo = await Todo.findById(parseInt(req.params.id), req.userId);
         if (!todo) {
             return res.status(404).json({ success: false, error: 'Todo not found' });
         }
@@ -43,7 +43,6 @@ const getTodoById = async (req, res) => {
 // Create new todo
 const createTodo = async (req, res) => {
     try {
-        // Check validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ 
@@ -59,7 +58,7 @@ const createTodo = async (req, res) => {
             description, 
             priority, 
             due_date 
-        });
+        }, req.userId);
         
         res.status(201).json({ success: true, data: todo });
     } catch (error) {
@@ -78,7 +77,7 @@ const updateTodo = async (req, res) => {
             });
         }
 
-        const todo = await Todo.update(parseInt(req.params.id), req.body);
+        const todo = await Todo.update(parseInt(req.params.id), req.userId, req.body);
         if (!todo) {
             return res.status(404).json({ success: false, error: 'Todo not found' });
         }
@@ -91,7 +90,7 @@ const updateTodo = async (req, res) => {
 // Delete todo
 const deleteTodo = async (req, res) => {
     try {
-        const todo = await Todo.delete(parseInt(req.params.id));
+        const todo = await Todo.delete(parseInt(req.params.id), req.userId);
         if (!todo) {
             return res.status(404).json({ success: false, error: 'Todo not found' });
         }
@@ -104,7 +103,7 @@ const deleteTodo = async (req, res) => {
 // Toggle todo completion
 const toggleComplete = async (req, res) => {
     try {
-        const todo = await Todo.toggleComplete(parseInt(req.params.id));
+        const todo = await Todo.toggleComplete(parseInt(req.params.id), req.userId);
         if (!todo) {
             return res.status(404).json({ success: false, error: 'Todo not found' });
         }
@@ -114,25 +113,11 @@ const toggleComplete = async (req, res) => {
     }
 };
 
-// Get statistics
+// Get statistics for authenticated user
 const getStats = async (req, res) => {
     try {
-        const stats = await Todo.getStats();
+        const stats = await Todo.getStats(req.userId);
         res.json({ success: true, data: stats });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
-
-// Bulk delete completed todos
-const deleteCompleted = async (req, res) => {
-    try {
-        const deleted = await Todo.deleteCompleted();
-        res.json({ 
-            success: true, 
-            message: `${deleted.length} completed todos deleted`,
-            deletedCount: deleted.length 
-        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -145,6 +130,5 @@ module.exports = {
     updateTodo,
     deleteTodo,
     toggleComplete,
-    getStats,
-    deleteCompleted
+    getStats
 };
