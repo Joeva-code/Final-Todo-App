@@ -78,6 +78,9 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'unhealthy', database: 'disconnected' });
   }
 });
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/todos', todoRoutes);
 
 // Test endpoint
 app.get('/', (req, res) => {
