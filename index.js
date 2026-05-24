@@ -4,6 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 
+const authRoutes = require('./routes/authRoutes.js');
+const todoRoutes = require('./routes/todoRoutes.js');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
